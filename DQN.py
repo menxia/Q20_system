@@ -115,27 +115,27 @@ def make_epsilon_greedy_policy(estimator, nA):
 		return A
 	return policy_fn
 
-def deep_q_learning(sess, 
-	 				env, 
-	 				q_estimator,
-	 				target_estimator, 
-	 				state_processor,
-	 				num_episodes, 
-	 				experiment_dir, 
-	 				replay_memory = 500000, 
-	 				replay_memory_init_size = 50000,
-	 				update_target_estimator_every = 10000,
-	 				discount_factor = 0.99,
-	 				epsilon_start = 1.0,
-	 				epsilon_end = 0.1,
-	 				epsilon_decay_steps = 500000,
-	 				batch_size = 32, 
-	 				record_video_every = 50):
-	Transition = namedtuple('Transition', ['state', 'action', 'reward', 'next_state', 'done'])
-	replay_memory = []
-	estimator_copy = ModelParameterCopier(q_estimator, target_estimator)
-	# Keeps track of useful statistics
-	stats = 
+# def deep_q_learning(sess, 
+# 	 				env, 
+# 	 				q_estimator,
+# 	 				target_estimator, 
+# 	 				state_processor,
+# 	 				num_episodes, 
+# 	 				experiment_dir, 
+# 	 				replay_memory = 500000, 
+# 	 				replay_memory_init_size = 50000,
+# 	 				update_target_estimator_every = 10000,
+# 	 				discount_factor = 0.99,
+# 	 				epsilon_start = 1.0,
+# 	 				epsilon_end = 0.1,
+# 	 				epsilon_decay_steps = 500000,
+# 	 				batch_size = 32, 
+# 	 				record_video_every = 50):
+# 	Transition = namedtuple('Transition', ['state', 'action', 'reward', 'next_state', 'done'])
+# 	replay_memory = []
+# 	estimator_copy = ModelParameterCopier(q_estimator, target_estimator)
+# 	# Keeps track of useful statistics
+# 	stats = 
 
 
 

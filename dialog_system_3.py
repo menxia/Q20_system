@@ -5,6 +5,7 @@ import random
 import tensorflow as tf
 import os
 import itertools
+
 def construct_database(question_num, people_num, sparsity):
 	data = list(product([1, -1], repeat = question_num))
 	data = random.sample(data, people_num)

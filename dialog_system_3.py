@@ -22,6 +22,7 @@ class StateTracker():
 		self.question_num = question_num
 		self.people_num = people_num
 		self.data_masked, self.data = construct_database(question_num, people_num, sparsity)
+		# consider full dataset
 		self.data_masked = self.data
 		self.rows, self.columns = self.data.shape
 	def initialization(self):
@@ -40,7 +41,7 @@ class StateTracker():
 			self.reward = 0
 		else:
 			self.turn += 1
-			self.reward = 0
+			self.reward = -1
 			self.question_list.append(agent_action)
 			self.answer_list.append(self.people_info[agent_action])
 			if self.turn > 20:
@@ -55,7 +56,7 @@ class StateTracker():
 			self.reward = -10
 			self.terminal = True
 		else:
-			self.reward = 40
+			self.reward = 200
 			self.terminal = True
 		# update sparsity database
 		# if self.state['qa_pair'] != []:
@@ -65,7 +66,23 @@ class StateTracker():
 
 
 	def state_for_agent(self):
-		return {'guess': self.state['guess'], 'representation': self.state_represent(self.state)}
+		return {'guess': self.state['guess'], 'representation': self.state_represent_comp_matrix(self.state)}
+
+	def state_represent_comp_matrix(self, state):
+		# construct features for completion dataset
+		# compute how many people satis=fied all the answer
+		all_satisfied = np.repeat(True, self.rows)
+		asked_question = np.zeros(self.columns)
+		if state['turn'] == 0:
+			all_satisfied_ratio = 1.0
+		else:
+			for question_no, answer in zip(state['qa_pair'][0], state['qa_pair'][1]):
+				right_list = self.data_masked[:, question_no] == answer
+				all_satisfied  = [i and j for i, j in zip(all_satisfied, right_list)]
+				asked_question[question_no] = 1
+		state_rep = np.hstack((asked_question, all_satisfied, state['turn']/40.))
+		state_rep = state_rep.reshape(1, -1)
+		return state_rep
 
 	def state_represent(self, state):
 		# state is dictionary {question_no: answer}
@@ -118,7 +135,8 @@ class Agent():
 
 
 	def build_model(self):
-		self.x = tf.placeholder(shape = [None, 2*self.question_num + self.people_num + 3], dtype = tf.float32)
+		self.x = tf.placeholder(shape = [None, 126], dtype = tf.float32)
+		# self.x = tf.placeholder(shape = [None, 2*self.question_num + self.people_num + 3], dtype = tf.float32)
 		# The TD target value
 		self.y = tf.placeholder(shape = [None], dtype = tf.float32)
 		# Integer id of which actions was selected
@@ -126,8 +144,8 @@ class Agent():
 
 		# MLP1
 		batch_size = tf.shape(self.x)[0]
-		hidden11 = tf.contrib.layers.fully_connected(self.x, 128)
-		hidden12 = tf.contrib.layers.fully_connected(hidden11, 64)
+		# hidden11 = tf.contrib.layers.fully_connected(self.x, 128)
+		hidden12 = tf.contrib.layers.fully_connected(self.x, 64)
 		self.predictions1 = tf.contrib.layers.fully_connected(hidden12, self.actions_num1)
 		# Get the predictions for the chosen actions only
 		gather_indices1 = tf.range(batch_size)*tf.shape(self.predictions1)[1] + self.actions
@@ -139,8 +157,8 @@ class Agent():
 		self.train_op1 = self.optimizer1.minimize(self.loss1, global_step=tf.contrib.framework.get_global_step())
 
 		# MLP2
-		hidden21 = tf.contrib.layers.fully_connected(self.x, 128)
-		hidden22 = tf.contrib.layers.fully_connected(hidden21, 64)
+		# hidden21 = tf.contrib.layers.fully_connected(self.x, 128)
+		hidden22 = tf.contrib.layers.fully_connected(self.x, 64)
 		self.predictions2= tf.contrib.layers.fully_connected(hidden22, self.actions_num2)
 		# Get the predictions for the chosen actions only
 		gather_indices2 = tf.range(batch_size)*tf.shape(self.predictions2)[1] + self.actions

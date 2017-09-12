@@ -23,6 +23,8 @@ def simulation_and_training(sess,
 
 	episode_lengths=np.zeros(num_episodes)
 	episode_rewards=np.zeros(num_episodes)
+	episode_guess = np.zeros(num_episodes)
+	episode_turn = np.zeros(num_episodes)
 
 	estimator_copy = ModelParameterCopier(q_estimator, target_estimator)
 
@@ -70,7 +72,7 @@ def simulation_and_training(sess,
 				print("Copied model parameters to target network.")
 				estimator_copy.make(sess)
 			# Print out which step we're on, useful for debugging.
-			print("\rStep {} ({}) @ Episode {}/{}, loss: {}".format(t, total_t, i_episode + 1, num_episodes, loss), end="")			
+			# print("\rStep {} ({}) @ Episode {}/{}, loss: {}".format(t, total_t, i_episode + 1, num_episodes, loss), end="")			
 			representation = state_agent['representation']
 			action_id = q_estimator.state_to_action(sess, representation, epsilons[min(total_t, epsilon_decay_steps-1)])
 			# print('Turn {} continue ask question: question_id is {}'.format(state_tracker.state['turn'], action_id))
@@ -101,10 +103,14 @@ def simulation_and_training(sess,
 			loss += loss1
 
 			if done:
+				episode_guess[i_episode] = state_tracker.state['guess']
+				episode_turn[i_episode] = state_tracker.state['turn']
+				if i_episode % 100 == 0:
+					print("Step {} ({}) @ Episode {}/{}, result: {}".format(episode_turn[i_episode], total_t, i_episode + 1, num_episodes, episode_guess[i_episode]))
 				break
 			state_agent = next_state_agent
 			total_t += 1
 
-		yield total_t, episode_lengths[:i_episode+1], episode_rewards[:i_episode+1]
+		# yield total_t, episode_lengths[:i_episode+1], episode_rewards[:i_episode+1]
 
-	return episode_lengths, episode_rewards
+	return episode_lengths, episode_rewards, episode_turn, episode_guess

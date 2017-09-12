@@ -7,10 +7,11 @@ import os
 import itertools
 
 def construct_database(question_num, people_num):
-	data = list(product([1, -1], repeat = question_num))
+	print(question_num/2)
+	data = list(product([1, -1], repeat = int(question_num/2)))
 	data = random.sample(data, people_num)
 	data = np.asarray(data)
-	data = np.hstack((data, data[:,:5]))
+	data = np.hstack((data, data))
 	return data
 
 class StateTracker():
@@ -27,36 +28,40 @@ class StateTracker():
 		self.answer_list = []
 		self.reward = None
 		self.terminal = False
-		self.guess = False
-		self.state = {'qa_pair': None, 'turn': self.turn, 'reward': None, 'guess': self.guess, 'terminal': self.terminal}
+		self.guess_result = 0
+		self.state = {'qa_pair': None, 'turn': self.turn, 'reward': None, 'guess': self.guess_result, 'terminal': self.terminal}
 	def update(self, agent_action):
-		if agent_action == 25:
+		if agent_action == self.question_num:
 			# self.guess = True
 			self.terminal = True
 			satisfied_idx, guess_people = self.choose_people_statisfied()
-			print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
+			# print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
 			if guess_people == self.selected_people_no and len(satisfied_idx) == 1:
-				self.reward = 40
+				self.reward = 80
+				self.guess_result = 1
 			else:
-				self.reward = -20
+				self.reward = -30
+				self.guess_result = -1
 		else:
 			self.turn += 1
 			self.reward = -1
 			self.question_list.append(agent_action)
 			self.answer_list.append(self.selected_people_info[agent_action])
-			if self.turn > 20:
+			if self.turn > 30:
 				# self.guess = True
 				self.terminal = True
 				satisfied_idx, guess_people = self.choose_people_statisfied()
-				print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
+				# print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
 				if guess_people == self.selected_people_no and len(satisfied_idx) == 1:
-					self.reward = 40
+					self.reward = 80
+					self.guess_result = 1
 				else:
 					self.reward = -30
+					self.guess_result = -1
 			else:
 				# self.guess = False
 				self.terminal = False
-		self.state = {'qa_pair': [self.question_list, self.answer_list], 'turn': self.turn, 'reward': self.reward, 'guess': self.guess,  'terminal': self.terminal}	
+		self.state = {'qa_pair': [self.question_list, self.answer_list], 'turn': self.turn, 'reward': self.reward, 'guess': self.guess_result,  'terminal': self.terminal}	
 
 	def choose_people_statisfied(self):
 		all_satisfied = np.repeat(True, self.rows)
@@ -90,16 +95,16 @@ class StateTracker():
 		return state_rep
 
 class Agent():
-	def __init__(self, scope = 'estimator'):
-		self.question_num = 25
-		self.people_num = 100
+	def __init__(self, question_num, people_num, scope = 'estimator'):
+		self.question_num = question_num
+		self.people_num = people_num
 		self.actions_num = self.question_num + 1
 		self.scope = scope
 		with tf.variable_scope(scope):
 			self.build_model()
 
 	def build_model(self):
-		self.x = tf.placeholder(shape = [None, 126], dtype = tf.float32)
+		self.x = tf.placeholder(shape = [None, self.actions_num + self.people_num], dtype = tf.float32)
 		# The TD target value
 		self.y = tf.placeholder(shape = [None], dtype = tf.float32)
 		# Integer id of which actions was selected

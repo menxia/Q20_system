@@ -6,6 +6,8 @@ import tensorflow as tf
 import os
 import itertools
 from Extract_data_from_database import *
+from sklearn.linear_model import SGDRegressor
+
 
 class StateTracker():
 	def __init__(self, people_number, question_number):
@@ -15,6 +17,7 @@ class StateTracker():
 		self.rows, self.columns = people_number, question_number
 	def dialog_initialization(self):
 		self.selected_people_no = random.choice(np.arange(self.rows))
+		# print('selected_people_no is {}'.format(self.selected_people_no))
 		# self.selected_people_info = self.data[self.selected_people_no]
 		self.turn = 0
 		self.question_list = []
@@ -35,6 +38,7 @@ class StateTracker():
 			# self.guess = True
 			self.terminal = True
 			guess_people = self.choose_people_statisfied()
+			# print("guessed_people_no is {}".format(guess_people))
 			# print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
 			if guess_people == self.selected_people_no:
 				self.reward = 80
@@ -56,10 +60,11 @@ class StateTracker():
 			self.entropy_vector = self.compute_entropy()
 			self.state_rep = self.state_representation()
 
-			if self.turn > 30:
+			if self.turn > 20:
 				# self.guess = True
 				self.terminal = True
 				guess_people = self.choose_people_statisfied()
+				# print("guessed_people_no is {}".format(guess_people))
 				# print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
 				if guess_people == self.selected_people_no:
 					self.reward = 80
@@ -129,28 +134,39 @@ class StateTracker():
 		# 	satisfied_idx = [idx for idx, bool_value in enumerate(all_satisfied) if bool_value]
 		# 	return satisfied_idx, random.choice(satisfied_idx)
 		return np.argmax(self.prob_of_people)
-	# def state_for_agent(self):
-	# 	return {'terminal': self.terminal, 'representation': self.state_represent_comp_matrix(self.state)}
 
-	# def state_represent_comp_matrix(self, state):
-	# 	# construct features for completion dataset
-	# 	# compute how many people satis=fied all the answer
-	# 	all_satisfied = np.repeat(True, self.rows)
-	# 	asked_question = np.zeros(self.columns)
-	# 	if state['turn'] == 0:
-	# 		all_satisfied_ratio = 1.0
-	# 	else:
-	# 		for question_no, answer in zip(state['qa_pair'][0], state['qa_pair'][1]):
-	# 			if answer == 1:
-	# 				self.database_yes
+class LinearAgent():
+	def __init__(self, people_num, question_num):
+		self.question_num = question_num
+		self.people_num = people_num
+		self.actions_num = self.question_num + 1
+		self.models = []
+		state_tracker = StateTracker(people_num, question_num)
+		state_tracker.dialog_initialization()
+		state_for_agent = state_tracker.state_for_agent()
+		state_representation = state_for_agent['representation']
+		for _ in range(self.actions_num):
+			model = SGDRegressor(learning_rate = 'constant')
+			# We need to call partial_fit once to initilize the model
+			# or we get a NotFittedError when trying to make a prediction
+			# This is quite hacky.
+			model.partial_fit(state_representation, [0])
+			self.models.append(model)
+	def predict_q_values(self, s, a = None):
+		if a:
+			return self.models[a].predict(s)[0]
+		else:
+			return [model.predict(s)[0] for model in self.models]
+	def state_to_action(self, state, epsilon):
+		q_values = self.predict_q_values(state)
+		actions_prob = np.ones(self.actions_num, dtype = float) * epsilon/self.actions_num
+		best_action = np.argmax(q_values)
+		actions_prob[best_action] += (1.0 - epsilon)
+		action_id = np.random.choice(np.arange(len(actions_prob)), p=actions_prob)
+		return action_id
+	def update(self, s, a, y):
+		self.models[a].partial_fit(s, [y])
 
-	# 			right_list = self.data[:, question_no] == answer
-	# 			all_satisfied  = [i and j for i, j in zip(all_satisfied, right_list)]
-	# 			asked_question[question_no] = 1
-	# 	state_rep = np.hstack((asked_question, all_satisfied, state['turn']/20.))
-	# 	# state_rep = np.hstack((asked_question, state['turn']/20.))
-	# 	state_rep = state_rep.reshape(1, -1)
-	# 	return state_rep
 
 class Agent():
 	def __init__(self, people_num, question_num, scope = 'estimator'):

@@ -8,12 +8,20 @@ import itertools
 from Extract_data_from_database import *
 from sklearn.linear_model import SGDRegressor
 
+def construct_database(people_num, question_num):
+	# print(question_num/2)
+	data = list(product([1, -1], repeat = int(question_num)))
+	data = random.sample(data, people_num)
+	data = np.asarray(data)
+	# data = np.hstack((data, data))
+	return data == 1, data ==-1, np.zeros((people_num, question_num)), np.ones((people_num, question_num))
 
 class StateTracker():
 	def __init__(self, people_number, question_number):
 		self.people_num = people_number
 		self.question_num = question_number
-		self.database_yes, self.database_no, self.database_unknown, self.database_total = construct_read_database(people_number, question_number)
+		self.database_yes, self.database_no, self.database_unknown, self.database_total = construct_database(people_number, question_number)
+		print(self.database_yes[0])
 		self.rows, self.columns = people_number, question_number
 	def dialog_initialization(self):
 		self.selected_people_no = random.choice(np.arange(self.rows))
@@ -41,10 +49,10 @@ class StateTracker():
 			# print("guessed_people_no is {}".format(guess_people))
 			# print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
 			if guess_people == self.selected_people_no:
-				self.reward = 80
+				self.reward = 6
 				self.guess_result = 1
 			else:
-				self.reward = -30
+				self.reward = -3
 				self.guess_result = -1
 		else:
 			self.turn += 1
@@ -60,21 +68,21 @@ class StateTracker():
 			self.entropy_vector = self.compute_entropy()
 			self.state_rep = self.state_representation()
 
-			if self.turn > 20:
-				# self.guess = True
-				self.terminal = True
-				guess_people = self.choose_people_statisfied()
-				# print("guessed_people_no is {}".format(guess_people))
-				# print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
-				if guess_people == self.selected_people_no:
-					self.reward = 80
-					self.guess_result = 1
-				else:
-					self.reward = -30
-					self.guess_result = -1
-			else:
-				# self.guess = False
-				self.terminal = False
+			# if self.turn > 20:
+			# 	# self.guess = True
+			# 	self.terminal = True
+			# 	guess_people = self.choose_people_statisfied()
+			# 	# print("guessed_people_no is {}".format(guess_people))
+			# 	# print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
+			# 	if guess_people == self.selected_people_no:
+			# 		self.reward = 50
+			# 		self.guess_result = 1
+			# 	else:
+			# 		self.reward = -20
+			# 		self.guess_result = -1
+			# else:
+			# 	# self.guess = False
+			# 	self.terminal = False
 		self.state = {'qa_pair': [self.question_list, self.answer_list], 'turn': self.turn, 'reward': self.reward, 'guess': self.guess_result,  'terminal': self.terminal}	
 	
 	def answer_question(self, agent_action):
@@ -92,7 +100,7 @@ class StateTracker():
 			tmp_prob = (self.database_no[:, agent_action] + self.database_unknown[:, agent_action] * 0.5)
 		else:
 			tmp_prob = self.database_unknown[:, agent_action] * 0.5
-		prob_of_people = (self.turn * self.prob_of_people + tmp_prob) / (self.turn + 1)
+		prob_of_people = ((sum(self.asked_question) - 1) * self.prob_of_people + tmp_prob) / sum(self.asked_question)
 		return prob_of_people
 
 	def compute_certainty(self):
@@ -116,7 +124,8 @@ class StateTracker():
 		return result
 
 	def state_representation(self):
-		state_rep = np.hstack((self.asked_question, self.prob_of_people, self.certainty_vector, self.entropy_vector, self.turn/20.))
+		# state_rep = np.hstack((self.asked_question, self.prob_of_people, self.certainty_vector, self.entropy_vector, self.turn/20.))
+		state_rep = np.hstack((self.asked_question, self.prob_of_people, self.turn/20.))
 		state_rep = state_rep.reshape(1, -1)
 		return state_rep
 
@@ -165,8 +174,8 @@ class LinearAgent():
 		action_id = np.random.choice(np.arange(len(actions_prob)), p=actions_prob)
 		return action_id
 	def update(self, s, a, y):
+		# print(y)
 		self.models[a].partial_fit(s, [y])
-
 
 class Agent():
 	def __init__(self, people_num, question_num, scope = 'estimator'):
@@ -178,7 +187,7 @@ class Agent():
 			self.build_model()
 
 	def build_model(self):
-		self.x = tf.placeholder(shape = [None, self.actions_num + self.people_num + self.question_num + self.question_num], dtype = tf.float32)
+		self.x = tf.placeholder(shape = [None, self.actions_num + self.people_num + self.question_num], dtype = tf.float32)
 		# The TD target value
 		self.y = tf.placeholder(shape = [None], dtype = tf.float32)
 		# Integer id of which actions was selected
@@ -194,7 +203,8 @@ class Agent():
 		# Calculate the loss
 		self.loss = tf.reduce_mean(tf.squared_difference(self.y, self.action_predictions))
 		# Optimizer Parameters from original paper
-		self.optimizer = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6)
+		# self.optimizer = tf.train.RMSPropOptimizer(0.001, 0.99, 0.0, 1e-6)
+		self.optimizer = tf.train.AdamOptimizer()
 		self.train_op = self.optimizer.minimize(self.loss, global_step=tf.contrib.framework.get_global_step())
 	def predict_q_values(self, sess, state):
 		"""
@@ -251,3 +261,79 @@ class ModelParameterCopier():
 
 	def make(self, sess):
 		sess.run(self.update_ops)
+
+
+# Policy Gradient
+class PolicyEstimator():
+	"""
+	Policy Function -- Linear Function Approximation.
+	"""
+	def __init__(self, people_num, question_num, learning_rate = 0.000001, scope = 'policy_estimator'):
+		self.question_num = question_num
+		self.people_num = people_num
+		self.actions_num = self.question_num + 1
+		with tf.variable_scope(scope):
+			self.state = tf.placeholder(tf.float32, [None, self.actions_num + self.people_num], 'state')
+			self.action = tf.placeholder(dtype = tf.int32, name = 'action')
+			self.target = tf.placeholder(dtype = tf.float32, name = 'target')
+
+			self.output_layer = tf.contrib.layers.fully_connected(
+				inputs = self.state,
+				num_outputs = self.actions_num,
+				activation_fn=None)
+
+			self.action_probs = tf.squeeze(tf.nn.softmax(self.output_layer))
+			self.picked_action_prob = tf.gather(self.action_probs, self.action)
+
+			# Loss and train op
+			self.loss = -tf.log(self.picked_action_prob) * self.target 
+
+			self.optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate)
+			self.train_op = self.optimizer.minimize(
+				self.loss, global_step = tf.contrib.framework.get_global_step())
+	
+	def predict(self, state, sess=None):
+		sess = sess or tf.get_default_session()
+		return sess.run(self.action_probs, { self.state: state })
+
+	def update(self, state, target, action, sess=None):
+		sess = sess or tf.get_default_session()
+		feed_dict = { self.state: state, self.target: target, self.action: action  }
+		_, loss = sess.run([self.train_op, self.loss], feed_dict)
+		return loss
+
+class ValueEstimator():
+	"""
+	Value Function approximator. 
+	"""
+
+	def __init__(self, people_num, question_num, learning_rate=0.000001, scope="value_estimator"):
+		self.question_num = question_num
+		self.people_num = people_num
+		self.actions_num = self.question_num + 1
+		with tf.variable_scope(scope):
+			self.state = tf.placeholder(tf.float32, [None, self.actions_num + self.people_num], "state")
+			self.target = tf.placeholder(dtype=tf.float32, name="target")
+
+			# This is just table lookup estimator
+			self.output_layer = tf.contrib.layers.fully_connected(
+				inputs=self.state,
+				num_outputs=1,
+				activation_fn=None)
+
+			self.value_estimate = tf.squeeze(self.output_layer)
+			self.loss = tf.squared_difference(self.value_estimate, self.target)
+
+			self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+			self.train_op = self.optimizer.minimize(
+				self.loss, global_step=tf.contrib.framework.get_global_step())        
+
+	def predict(self, state, sess=None):
+		sess = sess or tf.get_default_session()
+		return sess.run(self.value_estimate, { self.state: state })
+
+	def update(self, state, target, sess=None):
+		sess = sess or tf.get_default_session()
+		feed_dict = { self.state: state, self.target: target }
+		_, loss = sess.run([self.train_op, self.loss], feed_dict)
+		return loss 

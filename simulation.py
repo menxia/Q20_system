@@ -4,6 +4,9 @@ import numpy as np
 import os
 from dialog_component_easy_version import *
 import itertools
+import matplotlib.pyplot as plt
+from IPython import display
+import pylab as pl
 def simulation_and_training(sess,
 					state_tracker,
 					target_estimator,
@@ -25,6 +28,7 @@ def simulation_and_training(sess,
 	episode_rewards=np.zeros(num_episodes)
 	episode_guess = np.zeros(num_episodes)
 	episode_turn = np.zeros(num_episodes)
+	success_ratio_for_each_100_epoch = []
 
 	estimator_copy = ModelParameterCopier(q_estimator, target_estimator)
 
@@ -102,11 +106,18 @@ def simulation_and_training(sess,
 			loss1 = q_estimator.update(sess, states_batch, action_batch, targets_batch)
 			loss += loss1
 
+
 			if done:
 				episode_guess[i_episode] = state_tracker.state['guess']
 				episode_turn[i_episode] = state_tracker.state['turn']
 				if i_episode % 100 == 0:
 					print("Step {} ({}) @ Episode {}/{}, result: {}".format(episode_turn[i_episode], total_t, i_episode + 1, num_episodes, episode_guess[i_episode]))
+				if i_episode % 100 == 0 and i_episode > 100:
+					sucess = sum([result == 1 for result in episode_guess[i_episode-100:i_episode]])
+					success_ratio_for_each_100_epoch.append(sucess*0.01)
+					pl.figure()
+					plt.plot(success_ratio_for_each_100_epoch)
+					display.display(pl.gcf())
 				break
 			state_agent = next_state_agent
 			total_t += 1

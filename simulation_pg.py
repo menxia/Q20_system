@@ -31,12 +31,12 @@ def simulation_and_training(state_tracker,
 		for t in itertools.count():
 
 			# Take action
-			if state_tracker.turn > 40:
-				# action_probs = estimator_policy.predict(state_representation)
-				action_id = state_tracker.question_num
-			else:
-				action_probs = estimator_policy.predict(state_representation)
-				action_id = np.random.choice(np.arange(len(action_probs)), p=action_probs)
+			# if state_tracker.turn > 40:
+			# 	# action_probs = estimator_policy.predict(state_representation)
+			# 	action_id = state_tracker.question_num
+			# else:
+			action_probs = estimator_policy.predict(state_representation)
+			action_id = np.random.choice(np.arange(len(action_probs)), p=action_probs)
 			
 			# update environment
 			state_tracker.update(action_id)

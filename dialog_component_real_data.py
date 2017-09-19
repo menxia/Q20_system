@@ -5,15 +5,18 @@ import random
 import tensorflow as tf
 import os
 import itertools
-from Extract_data_from_database import *
+# from Extract_data_from_database import *
 from sklearn.linear_model import SGDRegressor
 
 def construct_database(people_num, question_num):
 	# print(question_num/2)
-	data = list(product([1, -1], repeat = int(question_num)))
+	# data = list(product([1, -1], repeat = int(question_num)))
+	# data = random.sample(data, people_num)
+	# data = np.asarray(data)
+	data = list(product([1, -1], repeat = int(question_num/2)))
 	data = random.sample(data, people_num)
 	data = np.asarray(data)
-	# data = np.hstack((data, data))
+	data = np.hstack((data, data))
 	return data == 1, data ==-1, np.zeros((people_num, question_num)), np.ones((people_num, question_num))
 
 class StateTracker():
@@ -49,10 +52,10 @@ class StateTracker():
 			# print("guessed_people_no is {}".format(guess_people))
 			# print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
 			if guess_people == self.selected_people_no:
-				self.reward = 6
+				self.reward = 80
 				self.guess_result = 1
 			else:
-				self.reward = -3
+				self.reward = -30
 				self.guess_result = -1
 		else:
 			self.turn += 1
@@ -68,21 +71,21 @@ class StateTracker():
 			self.entropy_vector = self.compute_entropy()
 			self.state_rep = self.state_representation()
 
-			# if self.turn > 20:
-			# 	# self.guess = True
-			# 	self.terminal = True
-			# 	guess_people = self.choose_people_statisfied()
-			# 	# print("guessed_people_no is {}".format(guess_people))
-			# 	# print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
-			# 	if guess_people == self.selected_people_no:
-			# 		self.reward = 50
-			# 		self.guess_result = 1
-			# 	else:
-			# 		self.reward = -20
-			# 		self.guess_result = -1
-			# else:
-			# 	# self.guess = False
-			# 	self.terminal = False
+			if self.turn > 30:
+				# self.guess = True
+				self.terminal = True
+				guess_people = self.choose_people_statisfied()
+				# print("guessed_people_no is {}".format(guess_people))
+				# print("\nselected_number is {}, guessed_number is: {}, candidate people length is: {}\n".format(self.selected_people_no, guess_people, len(satisfied_idx)))
+				if guess_people == self.selected_people_no:
+					self.reward = 80
+					self.guess_result = 1
+				else:
+					self.reward = -30
+					self.guess_result = -1
+			else:
+				# self.guess = False
+				self.terminal = False
 		self.state = {'qa_pair': [self.question_list, self.answer_list], 'turn': self.turn, 'reward': self.reward, 'guess': self.guess_result,  'terminal': self.terminal}	
 	
 	def answer_question(self, agent_action):
@@ -100,7 +103,8 @@ class StateTracker():
 			tmp_prob = (self.database_no[:, agent_action] + self.database_unknown[:, agent_action] * 0.5)
 		else:
 			tmp_prob = self.database_unknown[:, agent_action] * 0.5
-		prob_of_people = ((sum(self.asked_question) - 1) * self.prob_of_people + tmp_prob) / sum(self.asked_question)
+		# prob_of_people = ((sum(self.asked_question) - 1) * self.prob_of_people + tmp_prob) / sum(self.asked_question)
+		prob_of_people = self.prob_of_people*tmp_prob
 		return prob_of_people
 
 	def compute_certainty(self):
@@ -187,14 +191,14 @@ class Agent():
 			self.build_model()
 
 	def build_model(self):
-		self.x = tf.placeholder(shape = [None, self.actions_num + self.people_num + self.question_num], dtype = tf.float32)
+		self.x = tf.placeholder(shape = [None, self.actions_num + self.people_num], dtype = tf.float32)
 		# The TD target value
 		self.y = tf.placeholder(shape = [None], dtype = tf.float32)
 		# Integer id of which actions was selected
 		self.actions = tf.placeholder(shape = [None], dtype = tf.int32)
 
 		batch_size = tf.shape(self.x)[0]
-		hidden = tf.contrib.layers.fully_connected(self.x, 128)
+		hidden = tf.contrib.layers.fully_connected(self.x, 32)
 		# predict the state-action values
 		self.predictions = tf.contrib.layers.fully_connected(hidden, self.actions_num)
 		# Get the predictions for the chosen actions only
@@ -203,8 +207,8 @@ class Agent():
 		# Calculate the loss
 		self.loss = tf.reduce_mean(tf.squared_difference(self.y, self.action_predictions))
 		# Optimizer Parameters from original paper
-		# self.optimizer = tf.train.RMSPropOptimizer(0.001, 0.99, 0.0, 1e-6)
-		self.optimizer = tf.train.AdamOptimizer()
+		self.optimizer = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6)
+		# self.optimizer = tf.train.AdamOptimizer()
 		self.train_op = self.optimizer.minimize(self.loss, global_step=tf.contrib.framework.get_global_step())
 	def predict_q_values(self, sess, state):
 		"""
@@ -268,7 +272,7 @@ class PolicyEstimator():
 	"""
 	Policy Function -- Linear Function Approximation.
 	"""
-	def __init__(self, people_num, question_num, learning_rate = 0.000001, scope = 'policy_estimator'):
+	def __init__(self, people_num, question_num, learning_rate = 0.001, scope = 'policy_estimator'):
 		self.question_num = question_num
 		self.people_num = people_num
 		self.actions_num = self.question_num + 1
@@ -307,7 +311,7 @@ class ValueEstimator():
 	Value Function approximator. 
 	"""
 
-	def __init__(self, people_num, question_num, learning_rate=0.000001, scope="value_estimator"):
+	def __init__(self, people_num, question_num, learning_rate=0.001, scope="value_estimator"):
 		self.question_num = question_num
 		self.people_num = people_num
 		self.actions_num = self.question_num + 1
